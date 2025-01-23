@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option go_package = "grpc_server/metadata";
+
+package metadata;
+
+service MapData {
+  rpc GetDistance (GetDistanceRequest) returns (GetDistanceReply) {}
+}
+
+message GetDistanceRequest {
+  int32 origin = 1;
+  int32 target = 2;
+}
+
+message GetDistanceReply {
+  double distance = 1;
+}
