@@ -6,6 +6,7 @@ package metadata;
 
 service MapData {
   rpc GetDistance (GetDistanceRequest) returns (GetDistanceReply) {}
+  rpc GetSectorInfo (GetSectorInfoRequest) returns (GetSectorInfoReply) {}
 }
 
 message GetDistanceRequest {
@@ -15,4 +16,13 @@ message GetDistanceRequest {
 
 message GetDistanceReply {
   double distance = 1;
+}
+
+message GetSectorInfoRequest {
+  int32 sector = 1;
+}
+
+message GetSectorInfoReply {
+  int32 province = 1;
+  int32 population = 2;
 }

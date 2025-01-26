@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MapData_GetDistance_FullMethodName = "/metadata.MapData/GetDistance"
+	MapData_GetDistance_FullMethodName   = "/metadata.MapData/GetDistance"
+	MapData_GetSectorInfo_FullMethodName = "/metadata.MapData/GetSectorInfo"
 )
 
 // MapDataClient is the client API for MapData service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MapDataClient interface {
 	GetDistance(ctx context.Context, in *GetDistanceRequest, opts ...grpc.CallOption) (*GetDistanceReply, error)
+	GetSectorInfo(ctx context.Context, in *GetSectorInfoRequest, opts ...grpc.CallOption) (*GetSectorInfoReply, error)
 }
 
 type mapDataClient struct {
@@ -47,11 +49,22 @@ func (c *mapDataClient) GetDistance(ctx context.Context, in *GetDistanceRequest,
 	return out, nil
 }
 
+func (c *mapDataClient) GetSectorInfo(ctx context.Context, in *GetSectorInfoRequest, opts ...grpc.CallOption) (*GetSectorInfoReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSectorInfoReply)
+	err := c.cc.Invoke(ctx, MapData_GetSectorInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MapDataServer is the server API for MapData service.
 // All implementations must embed UnimplementedMapDataServer
 // for forward compatibility.
 type MapDataServer interface {
 	GetDistance(context.Context, *GetDistanceRequest) (*GetDistanceReply, error)
+	GetSectorInfo(context.Context, *GetSectorInfoRequest) (*GetSectorInfoReply, error)
 	mustEmbedUnimplementedMapDataServer()
 }
 
@@ -64,6 +77,9 @@ type UnimplementedMapDataServer struct{}
 
 func (UnimplementedMapDataServer) GetDistance(context.Context, *GetDistanceRequest) (*GetDistanceReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetDistance not implemented")
+}
+func (UnimplementedMapDataServer) GetSectorInfo(context.Context, *GetSectorInfoRequest) (*GetSectorInfoReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSectorInfo not implemented")
 }
 func (UnimplementedMapDataServer) mustEmbedUnimplementedMapDataServer() {}
 func (UnimplementedMapDataServer) testEmbeddedByValue()                 {}
@@ -104,6 +120,24 @@ func _MapData_GetDistance_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MapData_GetSectorInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSectorInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MapDataServer).GetSectorInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MapData_GetSectorInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MapDataServer).GetSectorInfo(ctx, req.(*GetSectorInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MapData_ServiceDesc is the grpc.ServiceDesc for MapData service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -114,6 +148,10 @@ var MapData_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetDistance",
 			Handler:    _MapData_GetDistance_Handler,
+		},
+		{
+			MethodName: "GetSectorInfo",
+			Handler:    _MapData_GetSectorInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

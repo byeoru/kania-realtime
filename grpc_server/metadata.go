@@ -22,7 +22,6 @@ func (s *metadataServer) GetDistance(_ context.Context, in *pb.GetDistanceReques
 	originCenter := findCellCenter(getPackPolygon(in.GetOrigin()))
 	targetCenter := findCellCenter(getPackPolygon(in.GetTarget()))
 	distance := calculateDistance(originCenter, targetCenter)
-	fmt.Println("Distance:", distance)
 	return &pb.GetDistanceReply{Distance: distance}, nil
 }
 
@@ -51,4 +50,10 @@ func getPackPolygon(i int32) []PointData {
 func calculateDistance(originCenter, targetCenter PointData) float64 {
 	distance := math.Sqrt(math.Pow(targetCenter.X-originCenter.X, 2) + math.Pow(targetCenter.Y-originCenter.Y, 2))
 	return distance
+}
+
+func (s *metadataServer) GetSectorInfo(_ context.Context, in *pb.GetSectorInfoRequest) (*pb.GetSectorInfoReply, error) {
+	province := util.Pack.Cells.Cells.Province[fmt.Sprint(in.Sector)]
+	population := util.Pack.Cells.Cells.Pop[fmt.Sprint(in.Sector)]
+	return &pb.GetSectorInfoReply{Province: province, Population: population}, nil
 }
