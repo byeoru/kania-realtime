@@ -12,7 +12,11 @@ var (
 
 func NewServer() {
 	wsInit.Do(func() {
-		http.HandleFunc("/", handleBroadcast)
+		wss := NewWebSocketServer()
+		http.HandleFunc("/", wss.handleConnection)
+
+		go wss.handleBroadcast()
+
 		fmt.Println("WebSocket server is listening on :8081")
 		err := http.ListenAndServe(":8081", nil)
 		if err != nil {

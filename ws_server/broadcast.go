@@ -1,8 +1,10 @@
 package wsserver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -11,77 +13,116 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// WebSocket 연결을 위한 타입 정의
-type Client struct {
-	conn *websocket.Conn
-	lock sync.Mutex
-}
-
 var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true }, // Cross-Origin 모든 요청 허용, 나중에 꼭 수정해야 함
-	ReadBufferSize:  256,                                        // 읽기 버퍼 크기: 256B
-	WriteBufferSize: 256,                                        // 쓰기 버퍼 크기: 256B
+	ReadBufferSize:  512,                                        // 읽기 버퍼 크기: 512B
+	WriteBufferSize: 512,                                        // 쓰기 버퍼 크기: 512B
 }
 
-var clients = make(map[*websocket.Conn]*Client) // 모든 연결을 관리
-var functionMap = map[string]interface{}{}
+var BroadcastCh = make(chan []byte, 10)
 
-func makeMessage(title string, id int64, body string) (msgBytes []byte) {
-	// 메시지 생성
-	// fmt.Println("body", body)
+type WebSocketServer struct {
+	clients sync.Map
+}
+
+type Client struct {
+	conn   *websocket.Conn
+	cancel context.CancelFunc
+}
+
+type auth struct {
+	RmId int64 `json:"rm_id"`
+}
+
+func NewWebSocketServer() *WebSocketServer {
+	return &WebSocketServer{
+		clients: sync.Map{},
+	}
+}
+
+func MakeBroadcastMessage(title string, body interface{}) (msgBytes []byte) {
 	message := types.Response{
 		Title: title,
-		ID:    id,
-		Body:  []byte(body),
+		Body:  body,
 	}
 
-	// msg를 JSON으로 직렬화
-	msgBytes, _ = json.Marshal(message)
-	return
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return msgBytes
 }
 
-func handleBroadcast(w http.ResponseWriter, r *http.Request) {
-	var err error
+func (wss *WebSocketServer) handleConnection(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		fmt.Println("Error upgrading connection:", err)
 		return
 	}
-	defer conn.Close()
 
-	client := &Client{conn: conn}
-	clients[conn] = client
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		conn.Close()
+		return
+	}
+
+	var auth auth
+	err = json.Unmarshal(msg, &auth)
+	if err != nil {
+		log.Println("json unmarshal failed:", err)
+		conn.Close()
+		return
+	}
+
+	if client, ok := wss.clients.Load(auth.RmId); ok {
+		client.(*Client).cancel()     // 기존 고루틴 종료
+		client.(*Client).conn.Close() // 기존 연결 닫기
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	wss.clients.Store(auth.RmId, &Client{
+		conn:   conn,
+		cancel: cancel,
+	})
 	fmt.Println("New WebSocket connection established")
 
-	for {
-		// 클라이언트로부터 메시지 받기
-		messageType, p, err := conn.ReadMessage()
-		if err != nil {
-			fmt.Println("Error reading message:", err)
-			delete(clients, conn) // 연결 종료 시 클라이언트 맵에서 제거
-			return
-		}
-
-		// 클라이언트로 메시지 보내기
-		client.lock.Lock() // 특정 클라이언트에 대한 동기화 처리
-
-		var request types.Request
-		err = json.Unmarshal(p, &request)
-		if err != nil {
-			fmt.Println("Message format Error:", err)
-			return
-		}
-
-		if fn, exists := functionMap[request.Title]; exists {
-			if getWorldTimeFn, ok := fn.(func() time.Time); ok {
-				response := makeMessage(request.Title, request.ID, getWorldTimeFn().Format(time.RFC3339))
-				err = conn.WriteMessage(messageType, []byte(response))
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer func() {
+			ticker.Stop()
+			log.Println("🛑고루틴 종료")
+		}()
+		log.Println("🛑고루틴 생성")
+		for {
+			select {
+			case <-ticker.C:
+				err := conn.WriteMessage(websocket.PingMessage, nil) // 서버가 Ping 보냄
 				if err != nil {
-					fmt.Println("Error sending message:", err)
+					// log.Println("PING 전송 실패, 연결 종료:", err)
+					conn.Close()
+					wss.clients.Delete(auth.RmId)
 					return
 				}
+				log.Println("PING 전송")
+			case <-ctx.Done():
+				return
 			}
 		}
-		client.lock.Unlock()
+	}()
+}
+
+func (wss *WebSocketServer) handleBroadcast() {
+	for msg := range BroadcastCh {
+		wss.clients.Range(func(rmId, client any) bool {
+			c := client.(*Client)
+			err := c.conn.WriteMessage(websocket.TextMessage, msg)
+			if err != nil {
+				log.Println("Error sending message:", err)
+				// write error있을 경우 client 해제
+				c.conn.Close()
+				wss.clients.Delete(rmId)
+			}
+			return true
+		})
 	}
 }

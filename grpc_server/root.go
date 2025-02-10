@@ -10,7 +10,8 @@ import (
 	"os"
 	"sync"
 
-	pb "github.com/byeoru/kania-realtime/grpc_server/metadata"
+	metadataPb "github.com/byeoru/kania-realtime/grpc_server/metadata"
+	updatesPb "github.com/byeoru/kania-realtime/grpc_server/updates"
 	"github.com/byeoru/kania-realtime/util"
 	"google.golang.org/grpc"
 )
@@ -29,7 +30,9 @@ func NewServer() {
 			log.Fatalf("failed to listen: %v", err)
 		}
 		s := grpc.NewServer()
-		pb.RegisterMapDataServer(s, &metadataServer{})
+		metadataPb.RegisterMapDataServer(s, &metadataServer{})
+		updatesPb.RegisterRealtimeUpdatesServer(s, &updatesServer{})
+
 		log.Printf("server listening at %v", lis.Addr())
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("failed to serve: %v", err)
